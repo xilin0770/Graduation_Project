@@ -4,7 +4,7 @@ from knowledge.processor.import_process.exceptions import ValidationError, FileP
 
 from pathlib import Path
 import subprocess
-import time
+import time,os
 
 class PdfToMdNode(BaseNode):
     """
@@ -33,7 +33,14 @@ class PdfToMdNode(BaseNode):
         md_file_path = self._get_md_path(import_file_path, file_dir_path)
         # 4.更新state字典的md_path
         state["md_path"] = str(md_file_path)
-        # 5.返回state
+        # 5. 读取md文件
+        md_path_obj = state.get("md_path")
+
+        with open(md_path_obj,'r',encoding='utf-8') as f:
+            md_content =f.read() # todo:换成缓冲区读取，因为md文件可能很大
+
+        state["md_content"] = md_content
+        # 6. 返回state
         return state
 
 
@@ -101,7 +108,9 @@ class PdfToMdNode(BaseNode):
 
         process_start_time = time.time()
         # 2. 执行命令行(子进程执行命令行) 自动读取到主进程的环境变量
-        proc = subprocess.Popen(
+        try:    
+            proc = subprocess.Popen(
+                env=os.environ.copy(), 
                 args = cmd, 
                 # 我要将mineru产生的日志打印到我的日志中
                 stdout = subprocess.PIPE,
@@ -115,6 +124,10 @@ class PdfToMdNode(BaseNode):
                 # 实时打印日志
                 bufsize=1, # 按行缓冲区 只要缓冲区一行满了就输出
             )
+        
+        except Exception as e:
+            self.logger.error(f"执行MinerU工具解析PDF文件失败: {e}")
+            raise PdfConversionError("MinerU解析PDF文件失败", self.name)
         
         # 3. 获取日志信息
         for line in proc.stdout:
@@ -155,7 +168,7 @@ if __name__ == "__main__":
     pdf_to_md_node = PdfToMdNode()
 
     pdf_to_md_node_init_state = {
-        "import_file_path": r"D:\pycharm\project\shopkeeper_brain\scripts\Original document\高中数学知识点归纳.pdf",
+        "import_file_path": r"D:\pycharm\project\shopkeeper_brain\scripts\original_document\高中数学知识点归纳.pdf",
         "file_dir": r"D:\pycharm\project\shopkeeper_brain\scripts\processed"
     }
     pdf_to_md_node.process(pdf_to_md_node_init_state)

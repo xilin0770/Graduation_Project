@@ -88,8 +88,8 @@ class DocumentSplitNode(BaseNode):
 
         self.log_step("step1", "切分文档参数 校验并获取")
 
+
         config = get_config()
-        # 1. 获取md——content
         md_content = state.get("md_content")
 
         # 2. 统一换行符
@@ -373,13 +373,13 @@ if __name__ == "__main__":
     setup_logging()
     document_node = DocumentSplitNode()
     # 构造状态字典
-    file_path = r"D:\pycharm\project\shopkeeper_brain\scripts\processed\高中数学知识点归纳\hybrid_auto\高中数学知识点归纳.md"
+    file_path = r"D:\pycharm\project\shopkeeper_brain\knowledge\temp_data\20260317\3a0e13d3-f6ea-44e2-b7a4-cd7ff3431ee2\高中数学知识点归纳\hybrid_auto\高中数学知识点归纳.md"
     with open(file_path, "r", encoding="utf-8") as f:
         content = f.read()
 
     state = {
         "file_title": "万用表的使用",
         "md_content": content,
-        "file_dir": r"D:\pycharm\project\shopkeeper_brain\scripts\processed\高中数学知识点归纳\json_file",
+        "file_dir": r"D:\pycharm\project\shopkeeper_brain\knowledge\temp_data\20260317\3a0e13d3-f6ea-44e2-b7a4-cd7ff3431ee2\高中数学知识点归纳\json_file",
     }
     print(document_node.process(state))

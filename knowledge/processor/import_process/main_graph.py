@@ -24,7 +24,7 @@ def import_router(state: ImportGraphState) -> str:
     导入路由函数
     """
     if state.get("is_md_read_enabled"):
-        return "md_img_node"
+        return "document_split_node"
     if state.get("is_pdf_read_enabled"):
         return "pdf_to_md_node"
     return END
@@ -72,20 +72,20 @@ def create_import_graph() -> StateGraph:
     graph_pineline.add_conditional_edges(
         source="entry_node",
         path= import_router,
-        path_map={
-            "md_img_node": "md_img_node", # 前面时路由函数返回的，后面的是节点名字
+        path_map={ # 前面是路由函数返回的，后面的是节点名字
             "pdf_to_md_node": "pdf_to_md_node",
+            "document_split_node": "document_split_node",
             END: END
         }
     )
 
-    graph_pineline.add_edge("entry_node", "pdf_to_md_node")
+    # graph_pineline.add_edge("entry_node", "pdf_to_md_node")
     graph_pineline.add_edge("pdf_to_md_node", "document_split_node") # END节点不需要自己实例化
     graph_pineline.add_edge("document_split_node","math_concept_recognition")
     graph_pineline.add_edge("math_concept_recognition","bge_embedding_node")
     graph_pineline.add_edge("bge_embedding_node","import_milvus_node")
     graph_pineline.add_edge("import_milvus_node","kg_node")
-    graph_pineline.add_edge("md_img_node", END)
+    graph_pineline.add_edge("pdf_to_md_node", END)
     # print("------------边定义完成-----------------")
 
     # 4.编译（编排）

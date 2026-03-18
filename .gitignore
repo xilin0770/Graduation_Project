@@ -19,7 +19,11 @@ knowledge/core/
 knowledge/front/
 knowledge/schema/
 knowledge/prompts
-knowledge/utils
+knowledge/temp_data/
+knowledge/utils/
+
+README.md
+
 
 # https://github.com/xilin0770/Graduation_Project.git
 # Graduation_Project

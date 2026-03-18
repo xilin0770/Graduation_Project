@@ -110,11 +110,11 @@ class MathConceptRecognitionNode(BaseNode):
 
             # 构建上下文：[切片-1]标题 + body组成
             # 2. 提取
-            content = chunk.get("content")
-            spices = f"[切片-{index+1}] content:{content}"
+            body = chunk.get("body")
+            spices = f"[切片-{index+1}] content:{body}"
             
             # 3. 计算长度
-            total += len(content)
+            total += len(body)
             
             spices_result.append(spices)
 
@@ -262,7 +262,7 @@ class MathConceptRecognitionNode(BaseNode):
 if __name__ == "__main__":
     import json
 
-    chunk_json_path = r"D:\pycharm\project\shopkeeper_brain\scripts\processed\高中数学知识点归纳\json_file\chunks.json"
+    chunk_json_path = r"D:\pycharm\project\shopkeeper_brain\knowledge\temp_data\20260317\5e8b0b01-965d-49d3-8f20-b060093a20cc\chunks.json"
     with open(chunk_json_path, "r", encoding="utf-8") as f:
         chunks = json.load(f)
 

@@ -52,6 +52,7 @@ CYPHER_MERGE_ENTITY_TEMPLATE = """
     MERGE (n:Entity {{name: $name, math_concept: $math_concept}})
     ON CREATE SET
         n.source_chunk_id = $chunk_id,
+        n.title           = $title,
         n.description     = $description
     ON MATCH SET
         n.description = CASE
@@ -62,7 +63,7 @@ CYPHER_MERGE_ENTITY_TEMPLATE = """
 """
 # Entity关联Chunk
 CYPHER_LINK_ENTITY_TO_CHUNK = """
-    MATCH (n:Entity {name: $name, math_concept: $math_concept})
+    MATCH (n:Entity {name: $name, math_concept: $math_concept, title: $title})
     MATCH (c:Chunk  {title: $title, id: $chunk_id, math_concept: $math_concept})
     MERGE (n)-[:MENTIONED_IN]->(c)
 """
@@ -112,7 +113,7 @@ class _MilvusEntityWriter:
         self.collection_name = collection_name
         self.logger = logging.getLogger(self.__class__.__name__)
 
-    def insert(self, milvus_client, entities: List[Dict], chunk_id: str, content: str, math_concept: str) -> None:
+    def insert(self, milvus_client, entities: List[Dict], chunk_id: str, body: str, math_concept: str) -> None:
         """对外唯一入口：将实体写入 Milvus。"""
 
         # 1. 判断实体是否存在
@@ -145,7 +146,7 @@ class _MilvusEntityWriter:
             raise MilvusError(f"实体嵌入失败: {e}")
 
         # 6. 构建记录
-        records = self._build_records(entities_names, embedded_result, chunk_id, content, math_concept)
+        records = self._build_records(entities_names, embedded_result, chunk_id, body, math_concept)
         if not records:
             raise MilvusError("构建 Milvus 记录为空")
 
@@ -201,7 +202,7 @@ class _MilvusEntityWriter:
             entities_names: List[str],
             embedded_result: Dict[str, Any],
             chunk_id: str,
-            content: str,
+            body: str,
             math_concept: str,
     ) -> List[Dict[str, Any]]:
         """组装插入记录。"""
@@ -219,7 +220,7 @@ class _MilvusEntityWriter:
             raise ValueError("参数校验失败，向量不存在")
 
         # 4. 获取对应块的部分内容作为上下文
-        context = content[:200]
+        context = body[:200]
         records: List[Dict] = []
 
         # 5. 遍历每一个实体名，构建记录
@@ -281,7 +282,7 @@ class _Neo4jGraphWriter:
             entities:  清洗后的实体
             relations: 清洗后的关系链
             chunk_id:  实体对应的chunk_id
-            math_concept: 文档对应LLM提取的商品名
+            math_concept: 文档对应LLM提取的数学概念
 
         Returns:
 
@@ -329,11 +330,11 @@ class _Neo4jGraphWriter:
             # 动态格式化cypher， 将安全标签注入（TODO）
             cypher_query = CYPHER_MERGE_ENTITY_TEMPLATE.format(label=raw_label)
             tx.run( cypher_query, name=name, description=description,
-                    chunk_id=chunk_id, math_concept=math_concept)
+                    chunk_id=chunk_id, math_concept=math_concept, title=title)
 
             # 关联实体到 Chunk
             tx.run( CYPHER_LINK_ENTITY_TO_CHUNK,
-                    name=name, chunk_id=chunk_id, math_concept=math_concept)
+                    name=name, chunk_id=chunk_id, math_concept=math_concept, title=title)
             
         # 3. 创建实体之间的关系
         for rel in relations:
@@ -408,6 +409,7 @@ class KnowLedgeGraphNode(BaseNode):
                     filter=f'math_concept == "{math_concept}"',
                 )
                 self.logger.info(f"Milvus 旧数据已清理: math_concept={math_concept}")
+            self.logger.info(f"没有旧数据")
         except Exception as e:
             raise MilvusError(f"Milvus 清理失败: {e}")
 
@@ -437,7 +439,7 @@ class KnowLedgeGraphNode(BaseNode):
             # 1.1 获取chunk的信息
             chunk_id = chunk.get('chunk_id')
             math_concept = chunk.get('math_concept')
-            content = chunk.get('content')
+            body = chunk.get('body')
             title = chunk.get('title')
 
             # 2. 处理单个chunk
@@ -445,7 +447,7 @@ class KnowLedgeGraphNode(BaseNode):
 
                 entities_count, relations_count = self._process_single_chunk(   chunk_id,
                                                                                 math_concept,
-                                                                                content,
+                                                                                body,
                                                                                 title,
                                                                                 milvus_client,
                                                                                 neo4j_driver)
@@ -460,7 +462,7 @@ class KnowLedgeGraphNode(BaseNode):
 
     def _process_single_chunk(  self, chunk_id: str,
                                 math_concept: str,
-                                content: str,
+                                body: str,
                                 title:str,
                                 milvus_client: MilvusClient,
                                 neo4j_driver) -> Tuple[int, int]:
@@ -468,7 +470,7 @@ class KnowLedgeGraphNode(BaseNode):
         llm_start = time.time()
         # thread_name = threading.current_thread().name #  获取线程名
         # 1. 调用模型提取chunk的实体、关系
-        llm_response = self._extract_graph_with_retry(content)
+        llm_response = self._extract_graph_with_retry(body)
         llm_cost = time.time() - llm_start
 
         # 2. 解析并且清洗数据
@@ -482,7 +484,7 @@ class KnowLedgeGraphNode(BaseNode):
         # 3. 写入
         # 3.1 将清洗后的实体名字（可能是多个）存储到milvus
         milvus_start = time.time()
-        self._milvus_writer.insert(milvus_client, final_entities, chunk_id, content, math_concept)
+        self._milvus_writer.insert(milvus_client, final_entities, chunk_id, body, math_concept)
         milvus_cost = time.time() - milvus_start
 
         # 3.2 将清洗后的实体以及关系类型都存储到neo4j
@@ -502,7 +504,7 @@ class KnowLedgeGraphNode(BaseNode):
 
         return len(final_entities), len(final_relations)
 
-    def _extract_graph_with_retry(self, content: str) -> str:
+    def _extract_graph_with_retry(self, body: str) -> str:
 
         # 1. 获取LLM客户端
         llm_client = get_llm_client()
@@ -519,7 +521,7 @@ class KnowLedgeGraphNode(BaseNode):
                 # 2.1 调用模型
                 llm_response = llm_client.invoke([
                     SystemMessage(content=MATH_KG_SYSTEM_PROMPT),
-                    HumanMessage(content=f"切片信息\n\n{content}")
+                    HumanMessage(content=f"切片信息\n\n{body}")
                 ])
                 # 2.2 获取内容
                 result = getattr(llm_response, 'content', '').strip()
@@ -534,7 +536,7 @@ class KnowLedgeGraphNode(BaseNode):
                 if attempt < MAX_COUNT:
                     # 睡一会：间隔[固定间隔/指数退避]
                     delay = 0.5 * (2 ** (attempt - 1))
-                    self.logger.warning(f"开始第{attempt}次重试，间隔：{delay:1.f}s")
+                    self.logger.warning(f"开始第{attempt}次重试，间隔：{delay:.1f}s")
                     time.sleep(delay)
         self.logger.error(f"已经进行了{MAX_COUNT}次重试，都失败原因：{str(last_error)}")
 
@@ -719,7 +721,7 @@ class KnowLedgeGraphNode(BaseNode):
 
         # 1. 获取基础字段
         chunks = state.get("chunks") or []
-        global_math_concept = str(state.get("math_concept", "")).strip()
+        global_math_concept = str(chunks[0].get("math_concept", "")).strip()
 
         # 2. 校验整体 chunks 是否存在
         if not chunks:
@@ -738,22 +740,22 @@ class KnowLedgeGraphNode(BaseNode):
             raw_id = chunk.get("chunk_id")
             chunk_id = str(raw_id).strip() if raw_id is not None else f"kg_chunk_temp_{i}"
 
-            # 3.3 获取 content 内容
-            content = str(chunk.get("content", "")).strip()
-            if not content:
-                self.logger.warning(f"Chunk {chunk_id} 缺少 content，已抛弃。")
+            # 3.3 获取 body 内容
+            body = str(chunk.get("body", "")).strip()
+            if not body:
+                self.logger.warning(f"Chunk {chunk_id} 缺少 body，已抛弃。")
                 continue
 
             # 3.4 获取 math_concept（chunk 级别优先，全局兜底）
-            chunk_item = str(chunk.get("math_concept", "")).strip() or global_math_concept
-            if not chunk_item:
+            math_concept = str(chunk.get("math_concept", "")).strip() or global_math_concept
+            if not math_concept:
                 self.logger.warning(f"Chunk {chunk_id} 缺少 math_concept 归属，已抛弃。")
                 continue
 
             # 3.5 更新 chunk 字段
             chunk["chunk_id"] = chunk_id
-            chunk["math_concept"] = chunk_item
-            chunk["content"] = content
+            chunk["math_concept"] = math_concept
+            chunk["body"] = body
 
             # 3.6 加入有效列表
             validated_chunks.append(chunk)
@@ -783,7 +785,7 @@ class KnowLedgeGraphNode(BaseNode):
             # 1. 提交所有任务
             future_to_idx = {}
             for i, chunk in enumerate(validated_chunks):
-                content = chunk.get("content")
+                body = chunk.get("body")
                 chunk_id = str(chunk.get("chunk_id"))
                 math_concept = chunk.get("math_concept")
                 title = chunk.get("title")[2:]
@@ -791,7 +793,7 @@ class KnowLedgeGraphNode(BaseNode):
                 # 像线程池中提交任务 返回任务对象
                 future = pool.submit(
                     self._process_single_chunk,
-                    chunk_id,math_concept, content, title, milvus_client,neo4j_driver
+                    chunk_id,math_concept, body, title, milvus_client,neo4j_driver
                 )
                 future_to_idx[future] = (i, chunk_id)
 
@@ -819,14 +821,12 @@ def test_kg_extraction():
     )
 
     mock_state = {
-        "math_concept": "万用表",
         "chunks": [
         {
             "title": "# 6、参数方程的概念",
             "body": "\n在平面直角坐标系中，如果曲线上任意一点的坐标\n\n$\\mathbf{x},\\mathbf{y}$ 都是某个变数 $\\mathbf{t}$ 的函数 $\\left\\{ \\begin{array}{l}\\mathbf{x} = \\mathbf{f}(\\mathbf{t}),\\\\ \\mathbf{y} = \\mathbf{g}(\\mathbf{t}), \\end{array} \\right.$ 并且对于 $\\mathbf{t}$ 的每一个允许值，由这个方程所确定的点 $\\mathbf{M}(\\mathbf{x},\\mathbf{y})$ 都在这条曲线上，那么这个方程就叫做这条曲线的 参数方\n\n程，联系变数 $x, y$ 的变数 $t$ 叫做参变数，简称参数。相对于参数方程而言，直接给出点的坐标间关系的方程叫 做普通方程。\n",
             "file_title": "万用表的使用",
             "parent_title": "# 6、参数方程的概念",
-            "content": "# 6、参数方程的概念\n\n在平面直角坐标系中，如果曲线上任意一点的坐标\n\n$\\mathbf{x},\\mathbf{y}$ 都是某个变数 $\\mathbf{t}$ 的函数 $\\left\\{ \\begin{array}{l}\\mathbf{x} = \\mathbf{f}(\\mathbf{t}),\\\\ \\mathbf{y} = \\mathbf{g}(\\mathbf{t}), \\end{array} \\right.$ 并且对于 $\\mathbf{t}$ 的每一个允许值，由这个方程所确定的点 $\\mathbf{M}(\\mathbf{x},\\mathbf{y})$ 都在这条曲线上，那么这个方程就叫做这条曲线的 参数方\n\n程，联系变数 $x, y$ 的变数 $t$ 叫做参变数，简称参数。相对于参数方程而言，直接给 出点的坐标间关系的方程叫做普通方程。\n",
             "math_concept": "集合 - 集合概念与表示\n函数 - 函数概念与性质\n函数 - 基本初等函数 - 指数函数\n函数 - 基本初等函数 - 对数函数\n函数 - 基本初等函数 - 幂函数\n立体几何 - 立体几何初步\n解析几何 - 平面解析几何初步\n算法 - 算法初步\n统计 - 统计\n概率 - 概率\n函数 - 基本初等函数 - 三角函数\n向量 - 平面向量\n三角函数 - 三角恒等变换\n解三角形 - 解三角形\n数列 - 数列\n不等式 - 不等式\n常用逻辑用语 - 常用逻辑用语\n解析几何 - 圆锥曲线与方程\n微积分 - 导数及其应用\n统计 - 统计案例\n推理与证明 - 推理与证明\n复数 - 数系 的扩充与复数\n算法 - 框图\n立体几何 - 空间向量与立体几何\n计数原理 - 计数原理\n概率 - 随机变量及其分布列\n数学史 - 数学史选讲\n信息安全与密码 - 信息安全与密码\n几何 - 球面上的几何\n代数 - 对称与群\n几何 - 欧拉公式与闭曲面分类\n几何 - 三等分角与数域扩充\n几何 -  几何证明选讲\n代数 - 矩阵与变换\n数列 - 数列与差分\n解析几何 - 坐标系与参数方程\n不等式 - 不等式选讲\n数论 - 初等数论初步\n优选法与试验设计 - 优选法与试验设计初步\n统筹法与图论 - 统筹法与图论初步\n风险与决策 - 风险与决策\n开关电路与布尔代数 - 开关电路与布尔代数",
             "dense_vector": [
                 0.0253753662109375,
