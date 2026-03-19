@@ -59,6 +59,9 @@ class EntryNode(BaseNode):
         elif suffix == '.md':
             state['is_md_read_enabled'] = True
             state['md_path'] = import_file_path
+            with open(import_file_path, "r", encoding="utf-8") as f:
+                md_content = f.read()
+                state['md_content'] = md_content
 
         else:
             self.logger.debug(f"文件类型{suffix}不支持")

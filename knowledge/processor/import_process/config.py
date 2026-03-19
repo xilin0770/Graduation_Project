@@ -50,8 +50,8 @@ class ImportConfig:
     chunks_collection: str = field(
         default_factory=lambda: os.getenv("CHUNKS_COLLECTION", "")
     )
-    math_concept_collection: str = field(
-        default_factory=lambda: os.getenv("MATH_CONCEPT_COLLECTION", "")
+    classical_chinese_concept_collection: str = field(
+        default_factory=lambda: os.getenv("CLASSICAL_CHINESE_CONCEPT_COLLECTION", "")
     )
     entity_name_collection: str = field(
         default_factory=lambda: os.getenv("ENTITY_NAME_COLLECTION", "")

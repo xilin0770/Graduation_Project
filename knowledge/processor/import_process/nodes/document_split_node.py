@@ -1,8 +1,8 @@
 from knowledge.processor.import_process.base import BaseNode, setup_logging, T
 from knowledge.processor.import_process.state import ImportGraphState
-from knowledge.processor.import_process.exceptions import ValidationError, FileProcessingError, ImageProcessingError
+from knowledge.processor.import_process.exceptions import ValidationError
 from knowledge.processor.import_process.config import get_config
-from knowledge.utils.minio_util import get_minio_client
+
 
 
 import re 
@@ -373,13 +373,13 @@ if __name__ == "__main__":
     setup_logging()
     document_node = DocumentSplitNode()
     # 构造状态字典
-    file_path = r"D:\pycharm\project\shopkeeper_brain\knowledge\temp_data\20260317\3a0e13d3-f6ea-44e2-b7a4-cd7ff3431ee2\高中数学知识点归纳\hybrid_auto\高中数学知识点归纳.md"
+    file_path = r"D:\pycharm\project\shopkeeper_brain\scripts\processed\语文文言文原文_解析\hybrid_auto\语文文言文原文_解析.md"
     with open(file_path, "r", encoding="utf-8") as f:
         content = f.read()
 
     state = {
-        "file_title": "万用表的使用",
+        "file_title": "文言文",
         "md_content": content,
-        "file_dir": r"D:\pycharm\project\shopkeeper_brain\knowledge\temp_data\20260317\3a0e13d3-f6ea-44e2-b7a4-cd7ff3431ee2\高中数学知识点归纳\json_file",
+        "file_dir": r"D:\pycharm\project\shopkeeper_brain\scripts\processed\语文文言文原文_解析\json_file",
     }
     print(document_node.process(state))
