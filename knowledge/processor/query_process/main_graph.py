@@ -37,32 +37,32 @@ def create_query_graph() -> CompiledStateGraph:
     流程结构::
 
         item_name_confirm
-              │
-              ├── (有答案) ────────────────────────────> answer_output
-              │                                              │
-              └── (无答案) ──> multi_search ─────┬──────────>│
-                                   │             │           │
-                         ┌─────────┼─────────────┼───────┐   │
-                         │         │             │       │   │
-                         v         v             v       v   │
-                   embedding  hyde_embedding  query_kg  web  │
-                         │         │             │       │   │
-                         └─────────┴─────────────┴───────┘   │
-                                       │                     │
-                                       v                     │
-                                     join                    │
-                                       │                     │
-                                       v                     │
-                                      rrf                    │
-                                       │                     │
-                                       v                     │
-                                    rerank                   │
-                                       │                     │
-                                       v                     │
-                               answer_output <───────────────┘
-                                       │
-                                       v
-                                      END
+                │
+                ├── (有答案) ────────────────────────────────> answer_output
+                │                                                │
+                └── (无答案) ──> multi_search ─────┬────────────> │
+                                        │          │             │
+                            ┌─────────┼─────────────┼───────┐   │
+                            │         │             │       │   │
+                            v         v             v       v   │
+                    embedding  hyde_embedding  query_kg  web    │
+                            │         │             │       │   │
+                            └─────────┴─────────────┴───────┘   │
+                                        │                       │
+                                        v                       │
+                                        join                    │
+                                        │                       │
+                                        v                       │
+                                        rrf                     │
+                                        │                       │
+                                        v                       │
+                                        rerank                  │
+                                        │                       │
+                                        v                       │
+                                answer_output <─────────────────┘
+                                        │
+                                        v
+                                        END
     """
 
     # 1. 定义LangGraph工作流
