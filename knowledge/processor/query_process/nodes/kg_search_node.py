@@ -166,9 +166,9 @@ def truncate_entity_name_length(entity_name: str) -> str:
     return name[:_ENTITY_NAME_MAX_LENGTH] if len(name) > _ENTITY_NAME_MAX_LENGTH else name
 
 
-def _item_name_filter_expr(item_names: List[str]) -> str:
-    quoted = ", ".join(f"'{item_name}'" for item_name in item_names)
-    return f"item_name in [{quoted}]"
+def _entity_name_filter_expr(entity_names: List[str]) -> str:
+    conditions = [f"entity_name like '%{name}%'" for name in entity_names]
+    return "(" + " OR ".join(conditions) + ")"
 
 
 def _clean_seed_rows(rows: List[Dict[str, Any]]) -> List[EntitySeedNode]:
@@ -219,56 +219,56 @@ def _one_hop_relations_to_texts(triples: List[OneHopRelation]) -> List[str]:
     return docs
 
 
-class _EntityExtractor:
-    """
-    实体提取器：
-    责任： 利用LLM从查询问题中提取实体
-    prompt:设计
-    """
+# class _EntityExtractor:
+#     """
+#     实体提取器：
+#     责任： 利用LLM从查询问题中提取实体
+#     prompt:设计
+#     """
 
-    def __init__(self):
-        self._logger = logging.getLogger(self.__class__.__name__)
+#     def __init__(self):
+#         self._logger = logging.getLogger(self.__class__.__name__)
 
-    def extract(self, user_query: str) -> List[str]:
-        """
-        根据用户问题提取当前问题下的实体名
-        Args:
-            user_query:  用户问题
+#     def extract(self, user_query: str) -> List[str]:
+#         """
+#         根据用户问题提取当前问题下的实体名
+#         Args:
+#             user_query:  用户问题
 
-        Returns:
-            List[str]: 提取后的实体名
+#         Returns:
+#             List[str]: 提取后的实体名
 
-        """
+#         """
 
-        # 1. 获取llm客户端
-        llm_client = get_llm_client(response_format=True)
+#         # 1. 获取llm客户端
+#         llm_client = get_llm_client(response_format=True)
 
-        # 2. 判断
-        if llm_client is None:
-            return []
+#         # 2. 判断
+#         if llm_client is None:
+#             return []
 
-        # 3. 获取提示词
-        # 3.1 系统提示词
-        entities_name_extract_system_prompt = ENTITY_EXTRACT_SYSTEM_PROMPT.format(
-            MAX_ENTITY_NAME_LENGTH=_ENTITY_NAME_MAX_LENGTH) # 15
+#         # 3. 获取提示词
+#         # 3.1 系统提示词
+#         entities_name_extract_system_prompt = ENTITY_EXTRACT_SYSTEM_PROMPT.format(
+#             MAX_ENTITY_NAME_LENGTH=_ENTITY_NAME_MAX_LENGTH) # 15
 
-        # 4. 调用LLM
-        try:
-            # 4.1 发送请求
-            llm_response = llm_client.invoke([
-                SystemMessage(content=entities_name_extract_system_prompt),
-                HumanMessage(content=f"用户问题:{user_query}")
-            ])
+#         # 4. 调用LLM
+#         try:
+#             # 4.1 发送请求
+#             llm_response = llm_client.invoke([
+#                 SystemMessage(content=entities_name_extract_system_prompt),
+#                 HumanMessage(content=f"用户问题:{user_query}")
+#             ])
 
-            # 4.2 获取模型的结果
-            llm_response_content = getattr(llm_response, 'content', "").strip()
+#             # 4.2 获取模型的结果
+#             llm_response_content = getattr(llm_response, 'content', "").strip()
 
-            # 4.3 清洗&解析
-            entities_name = _clean_parse_llm_content(llm_response_content)
-            return entities_name
-        except Exception as e:
-            self._logger.error(f"LLM 调用失败:{str(e)}")
-            return []
+#             # 4.3 清洗&解析
+#             entities_name = _clean_parse_llm_content(llm_response_content)
+#             return entities_name
+#         except Exception as e:
+#             self._logger.error(f"LLM 调用失败:{str(e)}")
+#             return []
 
 
 class _EntityAligner:
@@ -281,12 +281,11 @@ class _EntityAligner:
         self._logger = logging.getLogger(self.__class__.__name__)
         self._collection_name = collection_name
 
-    def align(self, entity_names: List[str], item_names: List[str]) -> Dict[str, Any]:
+    def align(self, entity_names: List[str]) -> Dict[str, Any]:
         """
 
         Args:
             entity_names:  LLM提取的实体名
-            item_names: 商品名
 
         Returns:
         Dict[str,Any]:该字典准备封装两个key.
@@ -324,8 +323,8 @@ class _EntityAligner:
         # 5.2 获取嵌入后的稀疏向量对象（二维数组）
         embedding_result_sparse = embedding_result['sparse']
 
-        # 6. 获取item_name的表达式
-        item_name_filtered_expr = _item_name_filter_expr(item_names)
+        # 6. 获取entity_name的表达式
+        entity_name_filtered_expr = _entity_name_filter_expr(entity_names)
 
         # 7. 遍历所有的实体名字
         aligned_entities_name: List[str] = []  # 存放所有实体的名字
@@ -335,8 +334,8 @@ class _EntityAligner:
         for index, entity_name in enumerate(entity_names):
             # 7.1 对齐一个实体的
             align_one_result: List[Dict[str, Any]] = self._align_one(milvus_client,
-                                                                    self._collection_name,
-                                                                    item_name_filtered_expr,
+                                                                    self._collection_name, # kb_graph_entity_names
+                                                                    entity_name_filtered_expr,
                                                                     embedding_result_dense,
                                                                     embedding_result_sparse,
                                                                     index,
@@ -371,7 +370,7 @@ class _EntityAligner:
 
     def _align_one(self, milvus_client: MilvusClient,
                     _collection_name: str,
-                    item_name_filtered_expr: str,
+                    entity_name_filtered_expr: str,
                     embedding_result_dense: List,
                     embedding_result_sparse: List,
                     index: int,
@@ -382,7 +381,7 @@ class _EntityAligner:
         Args:
             milvus_client: milvus的客户端
             _collection_name: 集合名称
-            item_name_filtered_expr: 匹配表达式
+            entity_name_filtered_expr: 匹配表达式
             embedding_result_dense: 稠密向量
             embedding_result_sparse: 稀疏向量
             index: 实体名的索引
@@ -410,7 +409,7 @@ class _EntityAligner:
         # 2. 创建混合搜索请求
         hybrid_search_requests = create_hybrid_search_requests(dense_vector=dense_vector,
                                                                 sparse_vector=sparse_vector,
-                                                                expr=item_name_filtered_expr, limit=5)
+                                                                expr=entity_name_filtered_expr, limit=5)
         # 3. 执行混合搜索请求
         reps = execute_hybrid_search_query(milvus_client=milvus_client,
                                             collection_name=_collection_name,
@@ -418,7 +417,7 @@ class _EntityAligner:
                                             ranker_weights=(0.4, 0.6),
                                             norm_score=True,
                                             limit=5,
-                                            output_fields=["source_chunk_id", "item_name", "context", "entity_name"],
+                                            output_fields=["source_chunk_id", "context", "entity_name"],
                                             )
 
         # 4. 解析结果
@@ -960,11 +959,11 @@ class KnowledgeGraphSearchNode(BaseNode):
     """
 
     def process(self, state: QueryGraphState) -> QueryGraphState:
-        # 1. 参数校验
-        validated_query, validated_item_names = self._validate_inputs(state)
+        # 1. 获取第一步输出的实体名和问题
+        validated_query, validated_entity_names = self._validate_inputs(state)
 
         # 2. 执行流水线
-        kg_result:Dict[str,Any] = self._run_pipeline(validated_query, validated_item_names)
+        kg_result:Dict[str,Any] = self._run_pipeline(validated_query, validated_entity_names)
 
         # 3. 更新state
         state['kg_chunks']=kg_result.get('kg_chunks')
@@ -975,33 +974,23 @@ class KnowledgeGraphSearchNode(BaseNode):
     def _validate_inputs(self, state: QueryGraphState) -> Tuple[str, List[str]]:
         # 1. 获取参数
         rewritten_query = state.get('rewritten_query', "")
-        item_names = state.get('item_names', "")
+        entity_names = state.get('entity_names', "")
 
         # 2. 校验
         if not rewritten_query or not isinstance(rewritten_query, str):
             raise StateFieldError(node_name=self.name, field_name="rewritten_query", expected_type=str)
 
-        if not item_names or not isinstance(item_names, list):
-            raise StateFieldError(node_name=self.name, field_name="item_names", expected_type=list)
+        if not entity_names or not isinstance(entity_names, list):
+            raise StateFieldError(node_name=self.name, field_name="entity_names", expected_type=list)
 
-        # 3. 从重写的问题中踢掉商品名(降噪以及无异议的查询)选择
-
-        user_query = rewritten_query
-        for name in item_names:
-            if not name:
-                continue
-            pattern = r"\s*".join(re.escape(ch) for ch in name.replace(" ", ""))
-            user_query = re.sub(pattern, "", user_query, flags=re.IGNORECASE)
-
-        user_query = " ".join(user_query.split()).strip()
         # 4. 返回
-        return user_query, item_names
+        return rewritten_query, entity_names
 
-    def _run_pipeline(self, validated_query: str, validated_item_names: List[str]) -> Dict[str, Any]:
+    def _run_pipeline(self, validated_query: str, validated_entity_names: List[str]) -> Dict[str, Any]:
 
         # 1. 初始化组件
-        entity_extractor = _EntityExtractor()
-        entity_aligner = _EntityAligner(collection_name=self.config.entity_name_collection)
+        # entity_extractor = _EntityExtractor()
+        entity_aligner = _EntityAligner(collection_name=self.config.entity_name_collection) # kb_graph_entity_names
         neo4g_graph_reader = _Neo4jGraphReader( database=self.config.neo4j_database, # neo4j
                                                 kg_max_seed_candidates=self.config.kg_max_seed_candidates, # 3
                                                 kg_max_total_seeds=self.config.kg_max_total_seeds, # 30
@@ -1009,13 +998,13 @@ class KnowledgeGraphSearchNode(BaseNode):
                                                 kg_max_total_triples=self.config.kg_max_total_triples, # 50
                                                 kg_max_total_chunks=self.config.kg_max_total_chunks # 50
                                                 )
-        chunk_back_filler = _ChunkBackFiller(collection_name=self.config.chunks_collection) # kb_chunks_v2
+        chunk_back_filler = _ChunkBackFiller(collection_name=self.config.chunks_collection) # test_chunks_collection
 
 
         # 2. 各个组件执行各种的业务
         # 2.1 利用提取器组件、对齐器组件提取实体以及对齐后的实体（LLM+Milvus）
-        entities_name = entity_extractor.extract(user_query=validated_query)
-        entities_name_aligned: Dict[str, Any] = entity_aligner.align(entities_name, item_names=validated_item_names)
+        # entities_name = entity_extractor.extract(user_query=validated_query)
+        entities_name_aligned: Dict[str, Any] = entity_aligner.align(validated_entity_names)
         # 获取所有对齐后的实体名(业务逻辑不使用)
         aligned_entities_name = entities_name_aligned.get('entities_aligned_name')
         # 获取所有对齐后的实体详情（结构信息细粒）
@@ -1056,17 +1045,9 @@ if __name__ == '__main__':
     # 其它路（语义相似这一路会根据我的语义相似查询）
     kg_search_node = KnowledgeGraphSearchNode()
     state = {
-        # "rewritten_query": "RS-12数字万用表如何测量直流电压",    （没有查询到）
-        "rewritten_query": "RS-12数字万用表如何进行直流电压的测量",# （没有查询到）
-        # "rewritten_query": "RS-12数字万用表如何打开背光灯键",
-        # "rewritten_query": "RS-12数字万用表更换电池需要注意什么",
-        # "rewritten_query": "RS-12数字万用表更换电池需要注意什么",   # 1.0
-        # "rewritten_query": "RS-12数字万用表如何测量电阻",  # 1.0  （没有查询到）
-        # "rewritten_query": "RS-12数字万用表如何进行电阻测量",  # 1.0
-        # "rewritten_query": "在RS-12 数字万用表中二极管的操作步骤是什么",
-        # "rewritten_query": "RS-12数字万",
-        # "item_names": ["RS-12数字万用表"]
-        "item_names": ["RS-12 数字万用表"]
+        'original_query': '18年的Ⅰ卷中“鲁芝字世英，扶风郿人也，世有名德，为西州豪族。”中的“也”有什么作用？',
+        'rewritten_query': '请问“也”字在文言文句子“鲁芝字世英，扶风郿人也，世有名德，为西州豪族。”中有什么作用？',
+        'entity_names': ['也']
     }
     result = kg_search_node.process(state)
 

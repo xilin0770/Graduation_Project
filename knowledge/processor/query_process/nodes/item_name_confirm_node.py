@@ -213,11 +213,12 @@ class ItemNameExtractor:
 
     def extract_classical_words(self, original_query: str):
         """
-        LLm根据用户原始问题提取商品名
-        ArgS:
-            original_query : 
+        LLm根据用户原始问题提取实体名
+        Args:
+            original_query : 用户原始问题
 
         Returns:
+            实体名列表
 
         """
         result : dict[str,any] = {"classical_words": [], "rewritten_query":""}
