@@ -14,6 +14,7 @@ class QueryGraphState(TypedDict):
     各个属性的结构
     """
     session_id: str # 会话ID
+    task_id: str
     message_id: str # 消息ID
     original_query: str # 原始查询
     embedding_chunks: list # 已向量化的切片
@@ -23,7 +24,7 @@ class QueryGraphState(TypedDict):
     reranked_docs: list  # 排序后的文档
     prompt: str  #提示词
     answer: str #答案
-    item_names: List[str] # 商品名称
+    entity_names: List[str] # 商品名称
     rewritten_query: str  #重写答案
     history: list   # 历史对话
     is_stream: bool # 是否流式输出
@@ -35,6 +36,7 @@ class QueryGraphState(TypedDict):
 
 DEFAULT_STATE: QueryGraphState = {
     "session_id": "",               # 会话ID
+    "task_id": "",                  # 任务ID
     "message_id": "",               # 消息ID
     "original_query": "",           # 原始查询
     "embedding_chunks": [],         # 已向量化的切片
@@ -44,7 +46,7 @@ DEFAULT_STATE: QueryGraphState = {
     "reranked_docs": [],            # 排序后的文档
     "prompt": "",                   # 提示词
     "answer": "",                   # 答案
-    "item_names": [],               # 商品名称
+    "entity_names": [],               # 商品名称
     "rewritten_query": "",          # 重写查询
     "history": [],                  # 历史对话
     "is_stream": False,             # 是否流式输出 (默认设为 False)

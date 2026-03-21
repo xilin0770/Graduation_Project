@@ -282,7 +282,7 @@ class ItemNameExtractor:
             raise ValueError(f"JSON反序列化LLM输出失败:{str(e)}")
     
 
-class ItemNameConfirmNode():
+class ItemNameConfirmNode(BaseNode):
 
     name = "item_name_confirm_node"
 
