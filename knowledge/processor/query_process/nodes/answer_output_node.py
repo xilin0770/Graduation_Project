@@ -193,7 +193,7 @@ class AnswerOutputNode(BaseNode):
     def _write_history(self, state: QueryGraphState):
         session_id = state["session_id"]
         rewritten_query = state.get("rewritten_query", "") or state.get("original_query", "")
-        item_names = state.get("item_names") or []
+        entity_names = state.get("entity_names") or []
         try:
             # 1. 写用户问题
             save_chat_message(
@@ -201,7 +201,7 @@ class AnswerOutputNode(BaseNode):
                 role="user",
                 text=state["original_query"],
                 rewritten_query=rewritten_query,
-                item_names=item_names,
+                entity_names=entity_names,
             )
             # 2. AI回复（假的+真的）
             if state.get("answer"):
@@ -210,7 +210,7 @@ class AnswerOutputNode(BaseNode):
                     role="assistant",
                     text=state["answer"],  # 模型的输出
                     rewritten_query=rewritten_query,
-                    item_names=item_names,
+                    entity_names=entity_names,
                 )
         except Exception as e:
             self.logger.warning(f"写入历史记录失败: {e}")
