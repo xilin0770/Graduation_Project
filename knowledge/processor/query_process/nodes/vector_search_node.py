@@ -52,7 +52,7 @@ class VectorSearchNode(BaseNode):
         if not reps or not reps[0]:
             return state
 
-        # 6. 更新state的embedding_chunks
+        # 6. 处理搜索结果
         result = []
         for rep in reps[0]:
             pk = rep.get("pk")
@@ -69,8 +69,9 @@ class VectorSearchNode(BaseNode):
                 } 
             }
             result.append(res)
-        state["embedding_chunks"] = result
-        return state
+
+        # 7. 返回局部更新状态，避免并行执行时的 InvalidUpdateError
+        return {"embedding_chunks": result}
 
 
     def _validate_query_inputs(self, state: QueryGraphState) -> tuple[str, list[str]]:

@@ -22,6 +22,7 @@ import logging
 
 from knowledge.processor.import_process.config import ImportConfig, get_config
 from knowledge.processor.import_process.exceptions import ImportProcessError
+from knowledge.utils.task_util import add_running_task, add_done_task
 T = TypeVar("T")  # 泛型状态类型 任意变量类型（可以是字典、列表、字符串等）
 
 
@@ -78,10 +79,22 @@ class BaseNode(ABC):
 
         self.logger.info(f"--- {self.name} 开始 ---")
 
+        # 获取任务 ID
+        task_id = state.get("task_id", "") if isinstance(state, dict) else ""
 
         try:
+            # 1. 标记节点正在运行
+            if task_id:
+                add_running_task(task_id, self.name)
+
+            # 2. 执行核心逻辑
             result = self.process(state)
             self.logger.info(f"--- {self.name} 完成 ---")
+
+            # 3. 标记节点运行完成
+            if task_id:
+                add_done_task(task_id, self.name)
+
             return result
         except ImportProcessError:
             # 已经是自定义异常，直接抛出

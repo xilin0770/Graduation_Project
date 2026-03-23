@@ -18,31 +18,36 @@ class AnswerOutputNode(BaseNode):
         task_id = state.get("task_id")
         is_stream = state.get("is_stream")
 
-        # 1. 已有答案 → 直接返回
+        # 2. 构建提示词 → 调用 LLM 生成答案
+        updates = {}
         if state.get("answer"):
             self._push_existing_answer(state)
-
-        # 2. 构建提示词 → 调用 LLM 生成答案
         else:
             prompt = self._build_prompt(state)
-            state["prompt"] = prompt
-            self._generate_answer(state, prompt)
+            updates["prompt"] = prompt
+            answer = self._generate_answer(state, prompt)
+            updates["answer"] = answer
 
         # 3. 写入历史记录（用户问题 + 助手回答）
-        self._write_history(state)
+        # 这里需要完整的信息，所以可以先合并 updates 到 state 中用于记录，但不返回完整 state
+        temp_state = state.copy()
+        temp_state.update(updates)
+        self._write_history(temp_state)
 
         # 4. 流式模式发送结束事件
         if is_stream:
             push_sse_event(task_id, SSEEvent.FINAL,
-                            {"answer": state.get("answer", "")})
-        return state
+                            {"answer": updates.get("answer", state.get("answer", ""))})
+        
+        # 5. 返回局部更新状态
+        return updates
 
     def _push_existing_answer(self, state: QueryGraphState):
         """非流式模式：存入任务结果；流式模式：让 FINAL 统一推送。"""
         if not state.get("is_stream"):
             set_task_result(state["task_id"], "answer", state["answer"])
 
-    def _generate_answer(self, state, prompt):
+    def _generate_answer(self, state, prompt) -> str:
         self.log_step("generate", "生成答案")
         llm_client = get_llm_client()
         if llm_client is None:
@@ -51,10 +56,11 @@ class AnswerOutputNode(BaseNode):
         task_id = state["task_id"]
 
         if state.get("is_stream"):
-            state["answer"] = self._stream_generate(llm_client, prompt, task_id)
+            answer = self._stream_generate(llm_client, prompt, task_id)
         else:
-            state["answer"] = self._invoke_generate(prompt)
-            set_task_result(task_id, "answer", state["answer"])
+            answer = self._invoke_generate(prompt)
+            set_task_result(task_id, "answer", answer)
+        return answer
 
     def _build_prompt(self, state: QueryGraphState) -> str:
         char_budget = self.config.max_context_chars

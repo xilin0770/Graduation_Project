@@ -19,9 +19,8 @@ class RerankNode(BaseNode):
         # 3. 动态Top_K截取(断崖检测)
         cutoff_docs = self._cliff_cutoff(reranked_docs)
 
-        state['reranked_docs'] = cutoff_docs
-
-        return state
+        # 4. 返回局部更新状态
+        return {'reranked_docs': cutoff_docs}
 
     def _merge_multi_source_docs(self, state: QueryGraphState) -> List[Dict[str, Any]]:
         """

@@ -74,7 +74,7 @@ class ImportFileService:
             raise HTTPException(status_code=500, detail="MinIO 服务不可用")
 
         # 3. 构建Minio客户端对象名（归档文件）------ 格式：origin_files/20240101/filename
-        minio_object_name = f"origin_files/{datetime.now().strftime('%Y%d%m')}/{file.filename}"
+        minio_object_name = f"origin_files/{datetime.now().strftime('%Y%m%d')}/{file.filename}"
 
         # 4. 获取桶名
         bucket_name = os.getenv("MINIO_BUCKET_NAME")

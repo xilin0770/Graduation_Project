@@ -57,11 +57,10 @@ class HyDeSearchNode(BaseNode):
         if not reps or not reps[0]:
             return state
         
-        # 8. 更新state的hyde_embedding_chunks
+        # 8. 处理搜索结果
         result = []
         for rep in reps[0]:
             distance = rep.get("distance")
-            chunk_id = rep.get("chunk_id")
             entity = rep.get("entity")
             chunk_id = entity.get("chunk_id")
             body = entity.get("body")
@@ -76,10 +75,9 @@ class HyDeSearchNode(BaseNode):
                 } 
             }
             result.append(res)
-        state["hyde_embedding_chunks"] = reps[0]
 
-        # 9. 返回更新后的state
-        return state
+        # 9. 返回局部更新状态，避免并行执行时的 InvalidUpdateError
+        return {"hyde_embedding_chunks": result}
 
 
     def _validate_query_inputs(self, state: QueryGraphState) -> tuple[str, list[str]]:

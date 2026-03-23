@@ -32,11 +32,8 @@ class McpSearchNode(BaseNode):
         if not mcp_result:
             return state
 
-        # 3. 更新state web_search_docs
-        state['web_search_docs'] = mcp_result
-
-        # 4. 返回更新后的state
-        return  state
+        # 3. 返回局部更新状态，避免并行执行时的 InvalidUpdateError
+        return {'web_search_docs': mcp_result}
         
     
 

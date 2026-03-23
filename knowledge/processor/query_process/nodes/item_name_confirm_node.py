@@ -1,4 +1,5 @@
 import logging
+from typing import Dict, Any
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -309,24 +310,39 @@ class ItemNameConfirmNode(BaseNode):
         else:
             confirmed, options = [], []
 
-        # 4. 决定state的key值（继续、结束）修改state
-        self._decide(state, classical_words, confirmed, options, rewritten_query)
+        # 4. 决定state的key值（继续、结束）并获取更新
+        updates = self._decide(state, classical_words, confirmed, options, rewritten_query)
 
-        return state 
+        return updates 
     
 
     def _decide(self, state: QueryGraphState, entity_names: list[str], confirmed: list[str],
-                options: list[str], rewritten_query: str):
+                options: list[str], rewritten_query: str) -> Dict[str, Any]:
+        """决定下一步去哪, 并返回需要更新的状态"""
+        updates = {
+            "entity_names": entity_names,
+            "confirmed_item_names": confirmed,
+            "item_options": options,
+            "rewritten_query": rewritten_query
+        }
 
+        # 1. 如果有明确的对齐结果
         if confirmed:
-            state['rewritten_query'] = rewritten_query
-            state['entity_names'] = confirmed
-
+            self.logger.info(f"商品名对齐成功: {confirmed}")
+            updates["next_step"] = "continue"
+        
+        # 2. 如果没有明确结果但有候选（待确认）
         elif options:
-            state['answer'] = (f"我不确定您指的是哪款产品。"
-                                f"您是在询问以下产品吗：{'、'.join(options)}？")
+            self.logger.info(f"商品名存在歧义，需用户确认: {options}")
+            updates["next_step"] = "confirm"
+            updates["answer"] = f"为您找到多个相关商品，请确认：{', '.join(options)}"
+        
+        # 3. 完全没找到
         else:
-            state['answer'] = "抱歉，我无法识别您询问的具体产品名称，请提供更准确的产品名称或型号。"
+            self.logger.info("未识别到有效的商品名称")
+            updates["next_step"] = "continue" # 兜底逻辑：继续尝试检索原始问题
+
+        return updates
 
 
 

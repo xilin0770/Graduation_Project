@@ -972,11 +972,11 @@ class KnowledgeGraphSearchNode(BaseNode):
         # 2. 执行流水线
         kg_result:Dict[str,Any] = self._run_pipeline(validated_query, validated_entity_names)
 
-        # 3. 更新state
-        state['kg_chunks']=kg_result.get('kg_chunks')
-        state['kg_triples']=kg_result.get('kg_triples')
-        # 4. 返回
-        return state
+        # 3. 返回局部更新状态，避免并行执行时的 InvalidUpdateError
+        return {
+            'kg_chunks': kg_result.get('kg_chunks'),
+            'kg_triples': kg_result.get('kg_triples')
+        }
 
     def _validate_inputs(self, state: QueryGraphState) -> Tuple[str, List[str]]:
         # 1. 获取参数
@@ -985,10 +985,10 @@ class KnowledgeGraphSearchNode(BaseNode):
 
         # 2. 校验
         if not rewritten_query or not isinstance(rewritten_query, str):
-            raise StateFieldError(node_name=self.name, field_name="rewritten_query", expected_type=str)
+            raise StateFieldEooror(node_name=self.name, field_name="rewritten_query", expected_type=str)
 
         if not entity_names or not isinstance(entity_names, list):
-            raise StateFieldError(node_name=self.name, field_name="entity_names", expected_type=list)
+            raise StateFieldEooror(node_name=self.name, field_name="entity_names", expected_type=list)
 
         # 4. 返回
         return rewritten_query, entity_names
