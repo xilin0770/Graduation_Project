@@ -1,20 +1,10 @@
 .vscode/
-scripts
 
 # Python缓存文件
 __pycache__/
 
 # 环境变量文件
-.env
 
-demo*
-
-.venv
-
-knowledge/test/
-knowledge/temp_data/
-
-README.md
 
 
 # https://github.com/xilin0770/Graduation_Project.git
